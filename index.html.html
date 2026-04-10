@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBill | AI Checkout</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0ede6;--bg2:#e8e4db;--card:#ffffff;--card2:#f5f2eb;--card3:#ede9e0;
+  --line:#ddd9ce;--line2:#cdc9be;--ink:#1c1a14;--ink2:#5a5649;--ink3:#9e9a8e;
+  --accent:#c97d2a;--accent-bg:rgba(201,125,42,0.09);--accent-border:rgba(201,125,42,0.25);--accent-dark:#9a5e18;
+  --green:#2d7a4f;--green-bg:rgba(45,122,79,0.09);--red:#b83232;--red-bg:rgba(184,50,50,0.09);
+  --amber:#b87a18;--amber-bg:rgba(184,122,24,0.09);--blue:#2c5fa8;--blue-bg:rgba(44,95,168,0.09);
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+  --r6:6px;--r8:8px;--r12:12px;--r16:16px;--r20:20px;
+  --shadow-sm:0 1px 6px rgba(0,0,0,0.07);--shadow:0 6px 24px rgba(0,0,0,0.10);
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh;
+  display:grid;grid-template-rows:56px 1fr;grid-template-columns:1fr 380px;overflow:hidden;height:100vh;}
+nav{grid-column:1/-1;display:flex;align-items:center;padding:0 1.25rem;border-bottom:1px solid var(--line);
+  background:var(--card);gap:14px;position:relative;z-index:100;box-shadow:var(--shadow-sm);}
+.nav-logo{display:flex;align-items:center;gap:9px}
+.nav-logo-icon{width:28px;height:28px;border-radius:7px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;}
+.nav-brand{font-weight:800;font-size:15px;letter-spacing:-.03em;color:var(--ink)}
+.nav-brand em{color:var(--accent);font-style:normal}
+.nav-pills{display:flex;gap:4px;margin-left:12px;}
+.nav-pill{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:99px;border:1px solid var(--line2);color:var(--ink3);letter-spacing:.04em;cursor:pointer;transition:all .18s;}
+.nav-pill.active,.nav-pill:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.lang-select{font-family:var(--mono);font-size:11px;background:var(--card2);border:1px solid var(--line2);color:var(--ink2);border-radius:var(--r8);padding:4px 7px;cursor:pointer;outline:none;}
+.status-pill{display:flex;align-items:center;gap:5px;background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:4px 11px;font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.06em;transition:all .25s;}
+.status-pill.live{color:var(--green);border-color:rgba(45,122,79,.3);background:var(--green-bg)}
+.status-pill.err{color:var(--red);border-color:rgba(184,50,50,.3);background:var(--red-bg)}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.status-pill.live .dot{animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.cam-panel{padding:1.1rem;display:flex;flex-direction:column;gap:.85rem;border-right:1px solid var(--line);overflow-y:auto;background:var(--bg);}
+.cart-panel{display:flex;flex-direction:column;background:var(--card);min-height:0;}
+.vbox{position:relative;background:#1c1a14;border:1px solid var(--line2);border-radius:var(--r16);aspect-ratio:1;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.scan-grid{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.scan-grid::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(201,125,42,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(201,125,42,0.06) 1px,transparent 1px);background-size:40px 40px;animation:gridshift 12s linear infinite;}
+@keyframes gridshift{from{background-position:0 0}to{background-position:40px 40px}}
+.sweep-line{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,rgba(201,125,42,0.5) 30%,rgba(201,125,42,0.9) 50%,rgba(201,125,42,0.5) 70%,transparent 100%);top:0;animation:sweep 3.2s ease-in-out infinite;opacity:0;}
+@keyframes sweep{0%{top:15%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:85%;opacity:0}}
+.vbox.on .sweep-line{display:block}
+.cx{position:absolute;width:18px;height:18px;border-color:rgba(201,125,42,0.8);border-style:solid;opacity:0;transition:opacity .35s,transform .35s}
+.cx.tl{top:12px;left:12px;border-width:2px 0 0 2px;transform:translate(-3px,-3px)}
+.cx.tr{top:12px;right:12px;border-width:2px 2px 0 0;transform:translate(3px,-3px)}
+.cx.bl{bottom:12px;left:12px;border-width:0 0 2px 2px;transform:translate(-3px,3px)}
+.cx.br{bottom:12px;right:12px;border-width:0 2px 2px 0;transform:translate(3px,3px)}
+.vbox.on .cx{opacity:1;transform:translate(0,0)}
+.buffer-bar-wrap{position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(255,255,255,.08);}
+.buffer-bar{height:100%;width:0%;background:rgba(201,125,42,0.9);transition:width .1s linear;}
+.buffer-label{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.7);opacity:0;transition:opacity .25s;white-space:nowrap;letter-spacing:.07em;}
+.buffer-label.show{opacity:1}
+.vbox-idle{display:flex;flex-direction:column;align-items:center;gap:10px;color:rgba(255,255,255,.25);font-family:var(--mono);font-size:11px;}
+.vbox.on .vbox-idle{display:none}
+.scan-ui{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;pointer-events:none;}
+.vbox.on .scan-ui{display:flex}
+.reticle{position:relative;width:80px;height:80px;display:flex;align-items:center;justify-content:center}
+.reticle-core{width:52px;height:52px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;position:relative;z-index:1;transition:all .25s;background:rgba(255,255,255,0.04);}
+.reticle-core.tracking{border-color:rgba(201,125,42,0.9);background:rgba(201,125,42,0.12);box-shadow:0 0 24px rgba(201,125,42,0.4)}
+.reticle-core::before,.reticle-core::after{content:'';position:absolute;background:rgba(255,255,255,0.3);transition:background .25s}
+.reticle-core::before{width:1px;height:16px}
+.reticle-core::after{width:16px;height:1px}
+.reticle-core.tracking::before,.reticle-core.tracking::after{background:rgba(201,125,42,0.9)}
+.reticle-pulse{position:absolute;inset:-8px;border-radius:50%;border:1px solid rgba(201,125,42,0.2);animation:rpulse 2.5s ease-out infinite}
+@keyframes rpulse{0%{transform:scale(.85);opacity:.6}100%{transform:scale(1.2);opacity:0}}
+.scan-item-name{font-family:var(--mono);font-size:12px;font-weight:500;color:#fff;letter-spacing:.08em;min-height:16px;text-align:center;}
+.scan-status-txt{font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;}
+.scan-ring-wrap{position:absolute;bottom:10px;right:10px;width:36px;height:36px;display:none;align-items:center;justify-content:center;}
+.vbox.on .scan-ring-wrap{display:flex}
+.srb{fill:none;stroke:rgba(255,255,255,.08);stroke-width:2.5}
+.srf{fill:none;stroke:rgba(201,125,42,0.9);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:113;stroke-dashoffset:113;transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dashoffset .22s linear}
+.srt{position:absolute;font-family:var(--mono);font-size:8px;color:rgba(255,255,255,.6);font-weight:500}
+.det-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:1rem;background:var(--card);border:1px solid var(--line);border-radius:var(--r12);padding:.75rem 1rem;box-shadow:var(--shadow-sm);}
+.det-lbl{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+#det-name{font-size:1.1rem;font-weight:700;color:var(--ink);transition:color .2s}
+#det-name.hi{color:var(--green)}
+.conf-col{text-align:right}
+.conf-track{width:72px;height:3px;background:var(--card3);border-radius:99px;overflow:hidden;margin-bottom:4px}
+.conf-fill{height:100%;border-radius:99px;background:var(--ink3);width:0%;transition:width .3s,background .3s}
+.conf-fill.hi{background:var(--green)}.conf-fill.md{background:var(--amber)}.conf-fill.lo{background:var(--red)}
+#conf-num{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.manual-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r12);padding:.85rem;box-shadow:var(--shadow-sm);}
+.manual-title{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.manual-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;}
+.manual-btn{padding:.6rem .5rem;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink2);cursor:pointer;transition:all .15s;text-align:center;}
+.manual-btn:hover{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent-dark)}
+.manual-btn .price{display:block;font-size:10px;font-family:var(--mono);color:var(--ink3);margin-top:2px;font-weight:400;}
+.manual-qty{display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);padding:7px 10px;}
+.qty-label{font-family:var(--mono);font-size:9px;color:var(--ink3);flex:1;text-transform:uppercase;letter-spacing:.06em}
+.qty-btn{width:24px;height:24px;border-radius:5px;border:1px solid var(--line2);background:var(--card);color:var(--ink);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.qty-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+#qty-val{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);min-width:22px;text-align:center;}
+.qty-select-row{margin-top:7px;display:flex;gap:6px;}
+.qty-item-select{flex:1;font-family:var(--mono);font-size:11px;background:var(--card2);border:1px solid var(--line);color:var(--ink2);border-radius:var(--r8);padding:5px 7px;outline:none;cursor:pointer;}
+.qty-add-btn{padding:5px 13px;background:var(--ink);border:none;border-radius:var(--r8);font-family:var(--mono);font-size:11px;color:#fff;cursor:pointer;transition:all .15s;}
+.qty-add-btn:hover{background:var(--accent)}
+#err-box{display:none;background:var(--red-bg);border:1px solid rgba(184,50,50,.2);border-radius:var(--r8);padding:.6rem .85rem;font-family:var(--mono);font-size:11px;color:var(--red);line-height:1.5}
+#err-box.on{display:block}
+.btn-start{width:100%;padding:.75rem;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--ink);color:#fff;border:none;border-radius:var(--r8);cursor:pointer;transition:all .18s;}
+.btn-start:hover:not(:disabled){background:var(--accent)}
+.btn-start:disabled{opacity:.3;cursor:not-allowed}
+.cart-head{padding:.9rem 1.15rem .8rem;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cart-title{font-weight:800;font-size:15px;color:var(--ink);letter-spacing:-.02em}
+#badge{font-family:var(--mono);font-size:10px;background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:2px 9px;color:var(--ink3);}
+.cart-tools{display:flex;gap:5px;}
+.icon-btn{width:28px;height:28px;border-radius:var(--r8);border:1px solid var(--line);background:var(--card2);color:var(--ink2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s;}
+.icon-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.undo-bar{display:flex;gap:5px;padding:.5rem 1.15rem;border-bottom:1px solid var(--line);background:var(--bg2);}
+.undo-btn{flex:1;padding:.4rem;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;background:var(--card);border:1px solid var(--line);border-radius:var(--r6);color:var(--ink3);cursor:pointer;transition:all .15s;}
+.undo-btn:hover:not(:disabled){color:var(--ink);border-color:var(--ink2)}
+.undo-btn:disabled{opacity:.3;cursor:not-allowed}
+.cart-list{flex:1;overflow-y:auto;padding:.8rem 1.15rem;display:flex;flex-direction:column;gap:5px;}
+.cart-list::-webkit-scrollbar{width:3px}
+.cart-list::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px}
+.empty-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ink3);font-family:var(--mono);font-size:11px;text-align:center;}
+.empty-icon{font-size:28px;opacity:.3}
+.citem{display:flex;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);padding:.55rem .8rem;gap:9px;animation:slidein .2s ease;transition:border-color .15s;}
+.citem:hover{border-color:var(--accent-border)}
+@keyframes slidein{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.citem-emoji{font-size:16px;width:24px;text-align:center;flex-shrink:0}
+.citem-info{flex:1;min-width:0}
+.citem-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.citem-qty{font-family:var(--mono);font-size:9px;color:var(--ink3);margin-top:1px}
+.citem-price{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent-dark);flex-shrink:0}
+.citem-btns{display:flex;gap:3px;flex-shrink:0}
+.citem-btn{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);background:var(--card);color:var(--ink3);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;transition:all .12s;}
+.citem-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.citem-btn.del:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.reco-section{padding:.6rem 1.15rem;border-bottom:1px solid var(--line);background:var(--bg2);}
+.reco-title{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;}
+.reco-chips{display:flex;gap:5px;flex-wrap:wrap}
+.reco-chip{display:flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:4px 10px 4px 8px;cursor:pointer;transition:all .15s;font-size:11px;font-weight:600;color:var(--ink2);}
+.reco-chip:hover{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent-dark)}
+.reco-chip-price{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.cart-foot{border-top:1px solid var(--line);padding:.9rem 1.15rem;background:var(--bg2);}
+.foot-rows{display:flex;flex-direction:column;gap:3px;margin-bottom:.85rem;}
+.foot-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.foot-row.total{font-size:11px;font-weight:600;color:var(--ink);margin-top:5px;padding-top:7px;border-top:1px solid var(--line)}
+.total-big{font-family:var(--mono);font-size:1.7rem;font-weight:700;color:var(--ink);transition:transform .12s;display:block;margin-bottom:.85rem;letter-spacing:-.02em;}
+#total-disp.bump{transform:scale(1.05)}
+.btn-checkout{width:100%;padding:.8rem;margin-bottom:5px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;background:var(--accent);color:#fff;border:none;border-radius:var(--r8);cursor:pointer;transition:all .18s;}
+.btn-checkout:hover:not(:disabled){background:var(--accent-dark)}
+.btn-checkout:disabled{opacity:.25;cursor:not-allowed}
+.checkout-split{display:flex;gap:5px;margin-bottom:5px;}
+.btn-split{flex:1;padding:.65rem;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;background:var(--card);border:1px solid var(--line);border-radius:var(--r8);color:var(--ink2);cursor:pointer;transition:all .15s;}
+.btn-split:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn-clear{width:100%;padding:.5rem;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;background:none;color:var(--ink3);border:1px solid var(--line);border-radius:var(--r8);cursor:pointer;transition:all .15s;}
+.btn-clear:hover{color:var(--red);border-color:rgba(184,50,50,.3)}
+.stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px;}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r8);padding:.65rem .75rem;text-align:center;box-shadow:var(--shadow-sm);}
+.stat-val{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent-dark)}
+.stat-lbl{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+
+/* MODALS */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(28,26,20,0.6);backdrop-filter:blur(6px);z-index:500;align-items:center;justify-content:center;}
+.modal-backdrop.show{display:flex}
+.modal-box{background:var(--card);border:1px solid var(--line);border-radius:var(--r20);padding:1.75rem;width:440px;max-width:95vw;animation:modalIn .22s ease;position:relative;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow);}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:none}}
+.modal-close{position:absolute;top:.9rem;right:.9rem;width:28px;height:28px;border-radius:var(--r8);border:1px solid var(--line);background:var(--card2);color:var(--ink3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;}
+.modal-close:hover{color:var(--red);border-color:rgba(184,50,50,.3)}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:.3rem;color:var(--ink);letter-spacing:-.02em}
+.modal-sub{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-bottom:1.25rem;letter-spacing:.04em}
+
+/* UPI QR SECTION */
+.upi-qr-wrap{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r12);padding:1.25rem;margin-bottom:1rem;text-align:center;}
+.upi-amount-label{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.upi-amount{font-family:var(--mono);font-size:2.4rem;font-weight:700;color:var(--ink);letter-spacing:-.02em;display:block;margin-bottom:4px}
+.upi-hint{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-bottom:1rem}
+#qrcode-pay{background:white;padding:12px;border-radius:var(--r12);display:inline-block;border:2px solid var(--accent-border);margin-bottom:.75rem;}
+.upi-id-row{display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--ink3);}
+.upi-id-badge{background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:99px;padding:3px 10px;color:var(--accent-dark);font-family:var(--mono);font-size:10px;}
+.pay-steps{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 14px;flex-wrap:wrap;}
+.pay-step{font-family:var(--mono);font-size:9px;color:var(--ink3);display:flex;align-items:center;gap:4px;}
+.pay-step-num{width:18px;height:18px;border-radius:50%;background:var(--card3);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;color:var(--ink2);}
+.pay-step-arrow{color:var(--line2);font-size:10px;}
+
+/* SMS SECTION */
+.sms-section{background:var(--green-bg);border:1px solid rgba(45,122,79,.2);border-radius:var(--r12);padding:1rem;margin-bottom:1rem;}
+.sms-title{font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.75rem;display:flex;align-items:center;gap:5px;}
+.sms-row{display:flex;gap:8px;align-items:flex-end;}
+.sms-input-wrap{flex:1}
+.sms-label{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+.sms-input{width:100%;background:var(--card);border:1px solid var(--line2);border-radius:var(--r8);padding:.5rem .75rem;font-family:var(--mono);font-size:12px;color:var(--ink);outline:none;transition:border-color .15s;}
+.sms-input:focus{border-color:var(--green)}
+.btn-sms{padding:.5rem .9rem;background:var(--green);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.btn-sms:hover{background:#1f5c39}
+.btn-sms:disabled{opacity:.4;cursor:not-allowed}
+.sms-status{font-family:var(--mono);font-size:10px;margin-top:6px;min-height:16px;color:var(--green);}
+.sms-hint{font-family:var(--mono);font-size:9px;color:var(--ink3);margin-top:5px;line-height:1.5;}
+.twilio-setup{background:var(--blue-bg);border:1px solid rgba(44,95,168,.2);border-radius:var(--r12);padding:.9rem;margin-top:8px;}
+.twilio-setup-title{font-family:var(--mono);font-size:9px;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem;display:flex;align-items:center;gap:5px;}
+.twilio-field{margin-bottom:8px}
+.twilio-label{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px}
+.twilio-input{width:100%;background:var(--card);border:1px solid var(--line2);border-radius:var(--r8);padding:.45rem .7rem;font-family:var(--mono);font-size:11px;color:var(--ink);outline:none;transition:border-color .15s;}
+.twilio-input:focus{border-color:var(--blue)}
+.btn-twilio-save{padding:.45rem 1rem;background:var(--blue);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:10px;letter-spacing:.06em;cursor:pointer;transition:background .15s;margin-top:4px;}
+.btn-twilio-save:hover{background:#1e4a8a}
+.twilio-note{font-family:var(--mono);font-size:9px;color:var(--ink3);line-height:1.6;margin-top:6px;}
+.twilio-note a{color:var(--blue)}
+.twilio-saved-badge{display:inline-flex;align-items:center;gap:4px;background:var(--green-bg);border:1px solid rgba(45,122,79,.2);border-radius:99px;padding:2px 8px;font-family:var(--mono);font-size:9px;color:var(--green);margin-left:6px;}
+
+/* CUSTOM QR SETTINGS */
+.custom-qr-toggle{display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;padding:6px;border-radius:var(--r8);border:1px dashed var(--line2);background:var(--card2);margin-bottom:.75rem;transition:all .15s;}
+.custom-qr-toggle:hover{border-color:var(--accent-border);color:var(--accent-dark)}
+.custom-qr-panel{display:none;background:var(--card2);border:1px solid var(--line);border-radius:var(--r12);padding:.9rem;margin-bottom:.75rem;}
+.custom-qr-panel.open{display:block}
+.cqr-label{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px;margin-top:8px}
+.cqr-label:first-child{margin-top:0}
+.cqr-input{width:100%;background:var(--card);border:1px solid var(--line2);border-radius:var(--r8);padding:.5rem .75rem;font-family:var(--mono);font-size:11px;color:var(--ink);outline:none;transition:border-color .15s;}
+.cqr-input:focus{border-color:var(--accent)}
+.cqr-row{display:flex;gap:6px;margin-top:4px;}
+.btn-cqr{padding:.45rem .85rem;background:var(--accent);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:10px;letter-spacing:.06em;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.btn-cqr:hover{background:var(--accent-dark)}
+.btn-cqr.secondary{background:var(--ink);}.btn-cqr.secondary:hover{background:#333}
+.cqr-preview{margin-top:8px;display:none;text-align:center;}
+.cqr-preview img{max-width:120px;border-radius:var(--r8);border:1px solid var(--line)}
+.cqr-status{font-family:var(--mono);font-size:10px;color:var(--green);margin-top:5px}
+.cqr-divider{display:flex;align-items:center;gap:8px;margin:10px 0;font-family:var(--mono);font-size:9px;color:var(--ink3)}
+.cqr-divider::before,.cqr-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+
+/* CONFIRM BUTTON */
+.btn-pay-confirm{width:100%;padding:.9rem;background:var(--green);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-pay-confirm:hover{background:#1f5c39}
+.btn-pay-confirm .check-icon{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:12px;}
+
+/* CASH */
+.cash-total-display{font-family:var(--mono);font-size:2.2rem;font-weight:700;color:var(--ink);margin-bottom:1rem;}
+.cash-label{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;text-align:left;}
+.cash-input-wrap{position:relative;margin-bottom:.85rem;}
+.cash-input-symbol{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:15px;color:var(--ink2);}
+.cash-input{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r8);padding:.7rem .7rem .7rem 1.9rem;font-family:var(--mono);font-size:1.1rem;font-weight:600;color:var(--ink);outline:none;transition:border-color .15s;}
+.cash-input:focus{border-color:var(--accent)}
+.cash-quick-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:.85rem;}
+.cash-quick{padding:.5rem;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);font-family:var(--mono);font-size:11px;color:var(--ink2);cursor:pointer;transition:all .15s;}
+.cash-quick:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.change-display{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r12);padding:.9rem;margin-bottom:.85rem;text-align:left;}
+.change-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:var(--mono);font-size:11px;color:var(--ink2);}
+.change-row.big{font-size:1.2rem;font-weight:700;color:var(--green);border-top:1px solid var(--line);margin-top:5px;padding-top:8px;}
+.change-row.insufficient .change-val{color:var(--red)!important;}
+.denomination-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+.denom-chip{background:var(--card);border:1px solid rgba(45,122,79,.2);border-radius:5px;padding:2px 7px;font-family:var(--mono);font-size:10px;color:var(--green);}
+.btn-cash-confirm{width:100%;padding:.8rem;background:var(--green);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background .15s;}
+.btn-cash-confirm:hover{background:#1f5c39}
+
+/* PAY TABS */
+.pay-tabs{display:flex;gap:3px;background:var(--bg2);border-radius:var(--r8);padding:3px;margin-bottom:1.25rem;border:1px solid var(--line);}
+.pay-tab{flex:1;padding:7px;font-family:var(--mono);font-size:10px;text-align:center;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;cursor:pointer;transition:all .15s;color:var(--ink3);border:none;background:none;}
+.pay-tab.active{background:var(--ink);color:#fff;}
+.pay-section{display:none;}.pay-section.show{display:block;}
+
+/* RECEIPT */
+.receipt{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r12);padding:.9rem;font-family:var(--mono);font-size:11px;margin-bottom:.85rem;}
+.receipt-head{text-align:center;margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px dashed var(--line2);}
+.receipt-store{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.01em;font-family:var(--sans);}
+.receipt-date{font-size:9px;color:var(--ink3);margin-top:3px}
+.receipt-items{margin-bottom:.75rem;}
+.receipt-item{display:flex;justify-content:space-between;padding:2px 0;color:var(--ink2);}
+.receipt-item .qty{color:var(--ink3);}
+.receipt-divider{border:none;border-top:1px dashed var(--line2);margin:.5rem 0;}
+.receipt-total{display:flex;justify-content:space-between;font-weight:600;color:var(--ink);font-size:12px;}
+.receipt-footer{text-align:center;color:var(--ink3);font-size:9px;margin-top:.7rem;padding-top:.7rem;border-top:1px dashed var(--line2);}
+.btn-receipt-print{width:100%;padding:.7rem;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);color:var(--ink2);font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .15s;margin-bottom:6px;}
+.btn-receipt-print:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* SPLIT */
+.split-controls{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+.split-people-tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.split-person-tab{padding:5px 12px;font-family:var(--mono);font-size:11px;border-radius:99px;border:1px solid var(--line);background:var(--card2);color:var(--ink2);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.split-person-tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.split-person-tab .tab-amt{font-size:9px;opacity:.7}
+.split-tab-del{background:none;border:none;color:inherit;cursor:pointer;font-size:11px;opacity:.6;line-height:1;padding:0 0 0 2px;}
+.split-tab-del:hover{opacity:1}
+.btn-add-person{padding:5px 12px;font-family:var(--mono);font-size:11px;border-radius:99px;border:1px dashed var(--line2);background:none;color:var(--ink3);cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn-add-person:hover{color:var(--ink);border-color:var(--ink2)}
+.split-items-panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r12);padding:.85rem;margin-bottom:.85rem;}
+.split-items-title{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.7rem;}
+.split-item-row{display:flex;align-items:center;gap:8px;padding:.5rem .6rem;border-radius:var(--r8);background:var(--card);border:1px solid var(--line);margin-bottom:5px;cursor:pointer;transition:all .15s;user-select:none;}
+.split-item-row.assigned{background:var(--accent-bg);border-color:var(--accent-border);}
+.split-item-row.assigned .split-item-name{color:var(--accent-dark)}
+.split-item-emoji{font-size:15px;width:22px;flex-shrink:0;text-align:center}
+.split-item-name{flex:1;font-size:12px;font-weight:600;color:var(--ink2);transition:color .15s;}
+.split-item-price{font-family:var(--mono);font-size:11px;color:var(--ink3);flex-shrink:0}
+.split-item-check{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--line2);background:var(--card);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;transition:all .15s;}
+.split-item-row.assigned .split-item-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.split-item-qty-note{font-family:var(--mono);font-size:9px;color:var(--ink3);margin-left:2px}
+.split-summary{display:flex;flex-direction:column;gap:4px;margin-bottom:1rem;}
+.split-sum-row{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);padding:5px 10px;}
+.split-sum-name{color:var(--ink2)}
+.split-sum-amt{font-weight:600;color:var(--accent-dark)}
+.split-unassigned-warn{font-family:var(--mono);font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid rgba(184,122,24,.2);border-radius:var(--r8);padding:6px 10px;margin-bottom:.85rem;text-align:center;}
+.btn-split-pay{width:100%;padding:.8rem;background:var(--ink);border:none;border-radius:var(--r8);color:#fff;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background .15s;}
+.btn-split-pay:hover{background:var(--accent)}
+
+/* TOAST */
+#toast{position:fixed;bottom:1.25rem;left:50%;transform:translateX(-50%) translateY(10px);background:var(--ink);border-radius:var(--r8);padding:.6rem 1.1rem;font-family:var(--mono);font-size:11px;color:#fff;opacity:0;pointer-events:none;white-space:nowrap;z-index:9999;transition:opacity .22s,transform .22s;letter-spacing:.04em;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.success{background:var(--green)}
+#toast.warn{background:var(--amber)}
+#toast.err{background:var(--red)}
+
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px}
+@media(max-width:780px){body{grid-template-columns:1fr;grid-template-rows:56px auto auto;height:auto;overflow:auto}.cam-panel{border-right:none;border-bottom:1px solid var(--line)}.cart-panel{min-height:400px}}
+
+/* HOME SMS CARD */
+.home-sms-section{background:var(--card);border:1px solid var(--line);border-radius:var(--r12);padding:.9rem;box-shadow:var(--shadow-sm);}
+.home-sms-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;cursor:pointer;user-select:none;}
+.home-sms-title{font-family:var(--mono);font-size:9px;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:5px;}
+.home-sms-toggle-btn{font-family:var(--mono);font-size:9px;color:var(--ink3);background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:2px 9px;cursor:pointer;transition:all .15s;}
+.home-sms-toggle-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.home-sms-body{display:none;padding-top:.5rem;}
+.home-sms-body.open{display:block;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🛒</div>
+    <div class="nav-brand">Smart<em>Bill</em></div>
+  </div>
+  <div class="nav-pills">
+    <div class="nav-pill active" id="tab-scan" onclick="switchTab('scan')">Scan</div>
+    <div class="nav-pill" id="tab-manual" onclick="switchTab('manual')">Manual</div>
+  </div>
+  <div class="nav-right">
+    <select class="lang-select" id="lang-select" onchange="setLanguage(this.value)">
+      <option value="en">🇬🇧 EN</option>
+      <option value="hi">🇮🇳 हिं</option>
+      <option value="gu">🇮🇳 ગુ</option>
+      <option value="mr">🇮🇳 मर</option>
+      <option value="es">🇪🇸 ES</option>
+      <option value="fr">🇫🇷 FR</option>
+      <option value="ar">🇸🇦 AR</option>
+    </select>
+    <div class="status-pill" id="status-pill"><div class="dot"></div><span id="status-txt">IDLE</span></div>
+  </div>
+</nav>
+
+<!-- CAM PANEL -->
+<div class="cam-panel" id="cam-panel">
+  <div id="scan-tab">
+    <div class="vbox" id="vbox">
+      <div class="scan-grid"></div>
+      <div class="sweep-line"></div>
+      <div class="cx tl"></div><div class="cx tr"></div>
+      <div class="cx bl"></div><div class="cx br"></div>
+      <div class="scan-ring-wrap">
+        <svg width="36" height="36" viewBox="0 0 44 44">
+          <circle class="srb" cx="22" cy="22" r="18"/>
+          <circle class="srf" id="ring" cx="22" cy="22" r="18"/>
+        </svg>
+        <span class="srt" id="ring-pct"></span>
+      </div>
+      <div class="vbox-idle" id="idle-msg">
+        <div style="font-size:32px;opacity:.2">📡</div>
+        <span id="txt-camera-off">Camera off</span>
+      </div>
+      <div class="scan-ui" id="scan-ui">
+        <div class="reticle">
+          <div class="reticle-pulse"></div>
+          <div class="reticle-core" id="reticle-core"></div>
+        </div>
+        <div class="scan-item-name" id="scan-item-name"></div>
+        <div class="scan-status-txt" id="scan-status-txt">Waiting for item…</div>
+      </div>
+      <div class="buffer-bar-wrap"><div class="buffer-bar" id="buffer-bar"></div></div>
+      <div class="buffer-label" id="buffer-label">DETECTING…</div>
+      <video id="webcam" autoplay playsinline style="display:none!important;"></video>
+    </div>
+    <div class="det-row">
+      <div>
+        <div class="det-lbl" id="txt-detected-item">Detected item</div>
+        <div id="det-name">—</div>
+      </div>
+      <div class="conf-col">
+        <div class="det-lbl" style="text-align:right" id="txt-confidence">Confidence</div>
+        <div class="conf-track"><div class="conf-fill" id="conf-fill"></div></div>
+        <div id="conf-num" style="margin-top:3px">0%</div>
+      </div>
+    </div>
+    <div id="err-box"></div>
+    <button class="btn-start" id="btn-start" onclick="startCamera()">▶ &nbsp;<span id="txt-start-cam">Start Camera</span></button>
+  </div>
+
+  <!-- MANUAL TAB -->
+  <div id="manual-tab" style="display:none">
+    <div class="manual-panel">
+      <div class="manual-title" id="txt-manual-add">Quick Add Items</div>
+      <div class="manual-grid" id="manual-grid"></div>
+      <div class="manual-qty">
+        <span class="qty-label" id="txt-quantity">Quantity</span>
+        <button class="qty-btn" onclick="changeQty(-1)">−</button>
+        <span id="qty-val">1</span>
+        <button class="qty-btn" onclick="changeQty(1)">+</button>
+        <select class="qty-item-select" id="qty-item-select" style="flex:1;margin-left:6px;"></select>
+        <button class="qty-add-btn" onclick="addQtyItem()" id="txt-add-btn">Add</button>
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar" style="margin-top:.85rem">
+      <div class="stat-card"><div class="stat-val" id="stat-items">0</div><div class="stat-lbl" id="txt-stat-items">Items</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-unique">0</div><div class="stat-lbl" id="txt-stat-unique">Unique</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-avg">₹0</div><div class="stat-lbl" id="txt-stat-avg">Avg Price</div></div>
+    </div>
+  </div>
+
+  <!-- SMS Notification Card (home page, standalone) -->
+  <div class="home-sms-section" id="home-sms-card">
+    <div class="home-sms-header" onclick="toggleHomeSMS()">
+      <div class="home-sms-title">📱 SMS Notifications <span style="color:var(--ink3);font-size:8px;font-weight:400;letter-spacing:0;text-transform:none;margin-left:4px;">via Twilio</span></div>
+      <span class="home-sms-toggle" id="home-sms-toggle-btn">▶ Configure</span>
+    </div>
+    <div class="home-sms-body" id="home-sms-body">
+      <div class="twilio-setup" style="margin-bottom:.85rem;">
+        <div class="twilio-setup-title">🔐 Twilio Credentials</div>
+        <div class="twilio-field">
+          <div class="twilio-label">📋 Account SID</div>
+          <input class="twilio-input" id="tw-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" type="text" autocomplete="off" oninput="updateTwilioCredStatus()">
+          <div class="twilio-note" style="margin-top:3px">Find in <a href="https://console.twilio.com" target="_blank" style="color:var(--blue)">Twilio Console</a> → Dashboard</div>
+        </div>
+        <div class="twilio-field">
+          <div class="twilio-label">🔑 Auth Token</div>
+          <input class="twilio-input" id="tw-token" placeholder="your_auth_token" type="password" autocomplete="off" oninput="updateTwilioCredStatus()">
+        </div>
+        <div class="twilio-field">
+          <div class="twilio-label">📞 Twilio Phone Number</div>
+          <input class="twilio-input" id="tw-from" placeholder="+1234567890" type="tel" autocomplete="off" oninput="updateTwilioCredStatus()">
+        </div>
+        <div id="twilio-cred-status" style="font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:var(--card3);color:var(--ink3);margin-top:6px;">⚠ Fill all 3 fields to enable SMS</div>
+        <button class="btn-twilio-save" onclick="saveTwilioConfig()" style="margin-top:8px;">💾 Save Credentials</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="cart-panel">
+  <div class="cart-head">
+    <div class="cart-title" id="txt-cart">Cart</div>
+    <span id="badge">0 items</span>
+    <div class="cart-tools">
+      <div class="icon-btn" title="Receipt" onclick="openReceiptModal()">🧾</div>
+    </div>
+  </div>
+  <div class="undo-bar">
+    <button class="undo-btn" id="btn-undo" onclick="undoAction()" disabled>↩ <span id="txt-undo">Undo</span></button>
+    <button class="undo-btn" id="btn-redo" onclick="redoAction()" disabled>↪ <span id="txt-redo">Redo</span></button>
+  </div>
+  <div class="reco-section" id="reco-section" style="display:none">
+    <div class="reco-title" id="txt-reco">Suggested for you</div>
+    <div class="reco-chips" id="reco-chips"></div>
+  </div>
+  <div class="cart-list" id="cart-list">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🛒</div>
+      <span id="txt-no-items">No items scanned yet</span>
+    </div>
+  </div>
+  <div class="cart-foot">
+    <div class="foot-rows">
+      <div class="foot-row"><span id="txt-items">Items</span><span id="count-foot">0</span></div>
+      <div class="foot-row"><span id="txt-discount">Discount</span><span>₹0</span></div>
+      <div class="foot-row total"><span id="txt-total">Total</span><span id="total-foot">₹0</span></div>
+    </div>
+    <span class="total-big" id="total-disp">₹0</span>
+    <button class="btn-checkout" id="btn-checkout" onclick="openPaymentModal()" disabled><span id="txt-checkout">Proceed to Checkout</span></button>
+    <div class="checkout-split">
+      <button class="btn-split" onclick="openSplitModal()">✂ <span id="txt-split-btn">Split Bill</span></button>
+      <button class="btn-split" onclick="openReceiptModal()">🧾 <span id="txt-receipt-btn">Receipt</span></button>
+    </div>
+    <button class="btn-clear" onclick="clearCart()"><span id="txt-clear">Clear Cart</span></button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAYMENT MODAL — Razorpay only
+     ═══════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="qr-modal">
+  <div class="modal-box" style="max-width:480px;">
+    <button class="modal-close" onclick="closeModal('qr-modal')">✕</button>
+    <div class="modal-title" id="txt-payment-title">💳 Payment</div>
+    <div class="modal-sub" id="txt-payment-sub">Complete your order securely</div>
+
+    <!-- Amount display -->
+    <div class="upi-qr-wrap" style="text-align:center;margin-bottom:1rem;">
+      <div class="upi-amount-label">Amount to Pay</div>
+      <span class="upi-amount" id="rzp-amount-disp">₹0</span>
+      <div class="upi-hint" style="margin-bottom:.75rem;">Pay securely via cards, UPI, wallets &amp; netbanking</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:9px;background:var(--blue-bg);border:1px solid rgba(44,95,168,.2);border-radius:6px;padding:4px 10px;color:var(--blue);">💳 Cards</span>
+        <span style="font-family:var(--mono);font-size:9px;background:var(--green-bg);border:1px solid rgba(45,122,79,.2);border-radius:6px;padding:4px 10px;color:var(--green);">📱 UPI</span>
+        <span style="font-family:var(--mono);font-size:9px;background:var(--amber-bg);border:1px solid rgba(184,122,24,.2);border-radius:6px;padding:4px 10px;color:var(--amber);">👛 Wallets</span>
+        <span style="font-family:var(--mono);font-size:9px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:6px;padding:4px 10px;color:var(--accent-dark);">🏦 Netbanking</span>
+      </div>
+    </div>
+
+    <!-- Razorpay Config -->
+    <div class="twilio-setup" style="margin-bottom:1rem;">
+      <div class="twilio-setup-title" style="color:var(--blue);">🔐 Razorpay Configuration</div>
+      <div class="twilio-field">
+        <div class="twilio-label">Key ID</div>
+        <input class="twilio-input" id="rzp-key" placeholder="rzp_live_xxxxxxxxxxxxxxxxxx" type="text" autocomplete="off" oninput="updateRzpStatus()">
+        <div class="twilio-note" style="margin-top:3px;">Find in <a href="https://dashboard.razorpay.com/app/keys" target="_blank" style="color:var(--blue)">Razorpay Dashboard</a> → Settings → API Keys</div>
+      </div>
+      <div class="twilio-field">
+        <div class="twilio-label">Business Name</div>
+        <input class="twilio-input" id="rzp-biz-name" placeholder="SmartBilling Store" type="text" autocomplete="off">
+      </div>
+      <div id="rzp-cred-status" style="font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:var(--card3);color:var(--ink3);margin-top:6px;">⚠ Enter your Razorpay Key ID to enable</div>
+      <button class="btn-twilio-save" onclick="saveRzpConfig()" style="margin-top:8px;background:var(--blue);">💾 Save Config</button>
+    </div>
+
+    <!-- SMS to customer (on payment page) -->
+    <div class="sms-section" style="margin-bottom:1rem;">
+      <div class="sms-title">✉️ Send Bill SMS to Customer</div>
+      <div class="sms-input-wrap" style="margin-bottom:8px;">
+        <div class="sms-label">Recipient Number (with country code)</div>
+        <input class="sms-input" id="sms-mobile" type="tel" placeholder="+919876543210" maxlength="15" inputmode="tel">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--ink3);margin-top:3px;">⚠ Trial accounts: number must be verified in Twilio Console first</div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div class="sms-label">Message Preview</div>
+        <div id="sms-preview" style="font-family:var(--mono);font-size:10px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r8);padding:.6rem .8rem;color:var(--ink2);line-height:1.5;min-height:40px;"></div>
+      </div>
+      <button class="btn-sms" id="btn-send-sms" onclick="sendSMSFromModal()" style="width:100%;padding:.65rem;" disabled>📨 Send Bill SMS</button>
+      <div class="sms-status" id="sms-status" style="margin-top:8px;font-size:11px;"></div>
+    </div>
+
+    <!-- Pay button -->
+    <button class="btn-pay-confirm" id="btn-rzp-pay" onclick="launchRazorpay()" style="background:var(--blue);">
+      <div class="check-icon">💳</div>
+      Pay with Razorpay
+    </button>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--ink3);text-align:center;margin-top:8px;line-height:1.6;">Powered by Razorpay · 256-bit SSL encrypted · PCI DSS compliant</div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL -->
+<div class="modal-backdrop" id="receipt-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('receipt-modal')">✕</button>
+    <div class="modal-title">🧾 Receipt</div>
+    <div class="modal-sub">Transaction summary</div>
+    <div class="receipt" id="receipt-content"></div>
+    <button class="btn-receipt-print" onclick="printReceipt()">🖨 Print / Save PDF</button>
+    <button class="btn-receipt-print" onclick="closeModal('receipt-modal')" style="background:var(--red-bg);border-color:rgba(184,50,50,.2);color:var(--red)">Close</button>
+  </div>
+</div>
+
+<!-- SPLIT MODAL -->
+<div class="modal-backdrop" id="split-modal">
+  <div class="modal-box" style="max-width:500px;">
+    <button class="modal-close" onclick="closeModal('split-modal')">✕</button>
+    <div class="modal-title">✂ Split Bill</div>
+    <div class="modal-sub">Assign items to each person</div>
+    <div class="split-controls">
+      <div class="split-people-tabs" id="split-people-tabs"></div>
+      <button class="btn-add-person" onclick="addSplitPerson()">+ Add</button>
+    </div>
+    <div class="split-items-panel">
+      <div class="split-items-title">Tap items to assign to selected person</div>
+      <div id="split-item-list"></div>
+    </div>
+    <div class="split-summary" id="split-summary"></div>
+    <div id="split-warn"></div>
+    <button class="btn-split-pay" onclick="confirmSplit()">✓ Confirm Split</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const MODEL_URL        = "https://teachablemachine.withgoogle.com/models/MZin2nasg/";
+const CONFIDENCE       = 0.80;
+const SCAN_HOLD_MS     = 1800;   // hold-steady before adding to cart
+const BUFFER_MS        = 4000;
+const PREDICT_EVERY_MS = 250;
+
+// ── UPI CONFIG — edit these ─────────────────────────────────────────────────
+// Set your merchant UPI ID here. QR will encode a proper UPI deep link.
+const MERCHANT_UPI_ID   = "merchant@upi";      // e.g. yourname@paytm
+const MERCHANT_NAME     = "SmartBilling";
+
+// ── TWILIO SMS — direct API (no proxy needed) ────────────────────────────────
+// Uses Basic Auth directly to Twilio's REST API, same as the standalone sender.
+let twilioConfig = JSON.parse(localStorage.getItem('twilio_config') || 'null');
+
+function updateTwilioCredStatus(){
+  const sid   = document.getElementById('tw-sid') ? document.getElementById('tw-sid').value.trim() : '';
+  const token = document.getElementById('tw-token') ? document.getElementById('tw-token').value.trim() : '';
+  const from  = document.getElementById('tw-from') ? document.getElementById('tw-from').value.trim() : '';
+  const statusEl = document.getElementById('twilio-cred-status');
+  const sendBtn  = document.getElementById('btn-send-sms');
+  const hasAll = sid.startsWith('AC') && token.length > 0 && from.startsWith('+');
+  if(statusEl){
+    if(hasAll){
+      statusEl.style.cssText = 'font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:#d4edda;color:#155724;margin-top:6px;';
+      statusEl.textContent = '✅ Credentials valid — ready to send SMS';
+    } else {
+      statusEl.style.cssText = 'font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:var(--card3);color:var(--ink3);margin-top:6px;';
+      const missing = [];
+      if(!sid.startsWith('AC')) missing.push('Account SID (starts with AC)');
+      if(!token) missing.push('Auth Token');
+      if(!from.startsWith('+')) missing.push('Phone Number (starts with +)');
+      statusEl.textContent = '⚠ Missing: ' + missing.join(', ');
+    }
+  }
+  if(sendBtn) sendBtn.disabled = !hasAll;
+}
+
+function saveTwilioConfig(){
+  const sid   = document.getElementById('tw-sid').value.trim();
+  const token = document.getElementById('tw-token').value.trim();
+  const from  = document.getElementById('tw-from').value.trim();
+  if(!sid.startsWith('AC') || !token || !from.startsWith('+')){
+    showToast('Fill all 3 Twilio fields correctly','warn'); return;
+  }
+  twilioConfig = { sid, token, from };
+  localStorage.setItem('twilio_config', JSON.stringify(twilioConfig));
+  showToast('✅ Twilio credentials saved!','success');
+}
+
+function buildSMSText(){
+  const lines = cartItems.map(i=>`${i.name} x${i.qty}=Rs${i.totalPrice}`).join(', ');
+  return `SmartBill: ${lines}. TOTAL: Rs${total}. Thank you! -${MERCHANT_NAME}`;
+}
+
+function openTwilioModal(){
+  // Legacy function — Twilio is now a home-page card; just update SMS preview
+  if(document.getElementById('sms-preview')){
+    document.getElementById('sms-preview').textContent = buildSMSText();
+  }
+}
+
+async function sendSMSViaTwilio(mobile){
+  const sid   = document.getElementById('tw-sid').value.trim();
+  const token = document.getElementById('tw-token').value.trim();
+  const from  = document.getElementById('tw-from').value.trim();
+  const statusEl = document.getElementById('sms-status');
+
+  if(!mobile){ statusEl.textContent = '⚠ Enter recipient number with country code'; return false; }
+  const phoneRegex = /^\+\d{10,15}$/;
+  if(!phoneRegex.test(mobile)){ statusEl.textContent = '❌ Invalid format. Use +919876543210'; return false; }
+  if(!sid || !token || !from){ statusEl.textContent = '⚠ Save Twilio credentials first'; return false; }
+
+  const btn = document.getElementById('btn-send-sms');
+  if(btn) btn.disabled = true;
+  statusEl.style.color = 'var(--ink3)';
+  statusEl.textContent = '📡 Connecting to Twilio…';
+
+  try {
+    const apiUrl = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
+    const formData = new URLSearchParams();
+    formData.append('To', mobile);
+    formData.append('From', from);
+    formData.append('Body', buildSMSText());
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${sid}:${token}`),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData
+    });
+    const data = await response.json();
+
+    if(response.ok){
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = `✅ SMS sent! SID: ${data.sid}`;
+      showToast('📱 Bill SMS sent!','success');
+      if(btn) btn.disabled = false;
+      return true;
+    } else {
+      let errMsg = data.message || 'Twilio error';
+      if(errMsg.includes('not verified')) errMsg = 'Number not verified. Trial accounts must verify numbers in Twilio Console → Verified Caller IDs.';
+      else if(errMsg.includes('authenticate')) errMsg = 'Wrong Account SID or Auth Token.';
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ ' + errMsg;
+      if(btn) btn.disabled = false;
+      return false;
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Network error — check connection or ad-blocker';
+    if(btn) btn.disabled = false;
+    return false;
+  }
+}
+
+function sendSMSFromModal(){
+  const mobile = document.getElementById('sms-mobile').value.trim();
+  sendSMSViaTwilio(mobile);
+}
+
+function proceedToPayment(){ checkout(); }
+function sendAndPay(){ sendSMSFromModal(); }
+function sendSMSReceipt(){}
+function sendSMSReceiptCash(){}
+
+// Load saved Twilio config on startup
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(twilioConfig){
+    setTimeout(()=>{
+      const s = document.getElementById('tw-sid');
+      const t = document.getElementById('tw-token');
+      const f = document.getElementById('tw-from');
+      if(s) s.value = twilioConfig.sid || '';
+      if(t) t.value = twilioConfig.token || '';
+      if(f) f.value = twilioConfig.from || '';
+      updateTwilioCredStatus();
+    }, 200);
+  }
+});
+
+// ── PRODUCT DATA ────────────────────────────────────────────────────────────
+const PRODUCT_DATA = {
+  Coke:   { price:40,  emoji:'🥤', class:'0' },
+  KitKat: { price:30,  emoji:'🍫', class:'1' },
+  Lays:   { price:20,  emoji:'🍟', class:'2' },
+};
+const VALID_PRODUCTS = Object.keys(PRODUCT_DATA);
+
+const RECO_RULES = {
+  Coke:   ['Lays','KitKat'],
+  Lays:   ['Coke'],
+  KitKat: ['Coke','Lays'],
+};
+
+const CLASS_MAP = {
+  "0":"Coke","1":"KitKat","2":"Lays","3":"nothing",
+  "Coke":"Coke","coke":"Coke",
+  "KitKat":"KitKat","kitkat":"KitKat",
+  "Lays":"Lays","lays":"Lays",
+  "nothing":"nothing","Nothing":"nothing"
+};
+
+// ── LANGUAGES ───────────────────────────────────────────────────────────────
+const LANG = {
+  en:{
+    'txt-cart':'Cart','txt-no-items':'No items scanned yet','txt-items':'Items','txt-discount':'Discount',
+    'txt-total':'Total','txt-checkout':'Proceed to Checkout','txt-clear':'Clear Cart',
+    'txt-detected-item':'Detected item','txt-confidence':'Confidence','txt-camera-off':'Camera off',
+    'txt-start-cam':'Start Camera','txt-manual-add':'Quick Add Items','txt-quantity':'Qty',
+    'txt-add-btn':'Add','txt-stat-items':'Items','txt-stat-unique':'Unique','txt-stat-avg':'Avg Price',
+    'txt-reco':'Suggested for you','txt-undo':'Undo','txt-redo':'Redo',
+    'txt-payment-title':'💳 Payment','txt-payment-sub':'Scan QR · Confirm · Done',
+    'txt-bill-amount':'Bill Amount','txt-cash-received':'Cash Received',
+    'txt-ch-total':'Bill Total','txt-ch-received':'Received','txt-ch-change':'Change',
+    'txt-split-btn':'Split Bill','txt-receipt-btn':'Receipt',
+  },
+  hi:{
+    'txt-cart':'कार्ट','txt-no-items':'कोई आइटम नहीं','txt-items':'आइटम','txt-discount':'छूट',
+    'txt-total':'कुल','txt-checkout':'चेकआउट करें','txt-clear':'कार्ट खाली करें',
+    'txt-detected-item':'पहचाना गया','txt-confidence':'विश्वास','txt-camera-off':'कैमरा बंद',
+    'txt-start-cam':'कैमरा शुरू करें','txt-manual-add':'आइटम जोड़ें','txt-quantity':'मात्रा',
+    'txt-add-btn':'जोड़ें','txt-stat-items':'आइटम','txt-stat-unique':'अलग','txt-stat-avg':'औसत',
+    'txt-reco':'सुझाव','txt-undo':'वापस','txt-redo':'फिर',
+    'txt-payment-title':'💳 भुगतान','txt-payment-sub':'QR स्कैन करें',
+    'txt-bill-amount':'बिल राशि','txt-cash-received':'नकद',
+    'txt-ch-total':'कुल','txt-ch-received':'प्राप्त','txt-ch-change':'वापसी',
+    'txt-split-btn':'बिल बाँटें','txt-receipt-btn':'रसीद',
+  },
+  gu:{
+    'txt-cart':'કાર્ટ','txt-no-items':'આઈટમ નથી','txt-items':'આઈટમ','txt-discount':'ડિસ્કાઉન્ટ',
+    'txt-total':'કુલ','txt-checkout':'ચેકઆઉટ','txt-clear':'કાર્ટ સાફ',
+    'txt-detected-item':'ઓળખ','txt-confidence':'ખાતરી','txt-camera-off':'કૅમેરો બંધ',
+    'txt-start-cam':'કૅમેરો શરૂ','txt-manual-add':'આઈટમ ઉમેરો','txt-quantity':'જથ્થો',
+    'txt-add-btn':'ઉમેરો','txt-stat-items':'આઈટમ','txt-stat-unique':'અલગ','txt-stat-avg':'સરેરાશ',
+    'txt-reco':'સૂચન','txt-undo':'પૂર્વવત','txt-redo':'ફ઼ેર',
+    'txt-payment-title':'💳 ચૂકવણી','txt-payment-sub':'QR સ્કૅન કરો',
+    'txt-bill-amount':'રકમ','txt-cash-received':'નાણું',
+    'txt-ch-total':'કુલ','txt-ch-received':'મળ્યું','txt-ch-change':'બાકી',
+    'txt-split-btn':'ખર્ચ વહેંચો','txt-receipt-btn':'રસીદ',
+  },
+  es:{
+    'txt-cart':'Carrito','txt-no-items':'Sin artículos','txt-items':'Artículos','txt-discount':'Descuento',
+    'txt-total':'Total','txt-checkout':'Pagar','txt-clear':'Vaciar',
+    'txt-detected-item':'Detectado','txt-confidence':'Confianza','txt-camera-off':'Cámara apagada',
+    'txt-start-cam':'Iniciar cámara','txt-manual-add':'Añadir','txt-quantity':'Cantidad',
+    'txt-add-btn':'Añadir','txt-stat-items':'Artículos','txt-stat-unique':'Únicos','txt-stat-avg':'Promedio',
+    'txt-reco':'Sugerencias','txt-undo':'Deshacer','txt-redo':'Rehacer',
+    'txt-payment-title':'💳 Pago','txt-payment-sub':'Escanea el QR',
+    'txt-bill-amount':'Total','txt-cash-received':'Efectivo',
+    'txt-ch-total':'Total','txt-ch-received':'Recibido','txt-ch-change':'Cambio',
+    'txt-split-btn':'Dividir','txt-receipt-btn':'Recibo',
+  },
+  fr:{
+    'txt-cart':'Panier','txt-no-items':'Aucun article','txt-items':'Articles','txt-discount':'Remise',
+    'txt-total':'Total','txt-checkout':'Commander','txt-clear':'Vider',
+    'txt-detected-item':'Détecté','txt-confidence':'Confiance','txt-camera-off':'Caméra éteinte',
+    'txt-start-cam':'Démarrer','txt-manual-add':'Ajouter','txt-quantity':'Quantité',
+    'txt-add-btn':'Ajouter','txt-stat-items':'Articles','txt-stat-unique':'Uniques','txt-stat-avg':'Moy.',
+    'txt-reco':'Suggestions','txt-undo':'Annuler','txt-redo':'Refaire',
+    'txt-payment-title':'💳 Paiement','txt-payment-sub':'Scannez le QR',
+    'txt-bill-amount':'Montant','txt-cash-received':'Espèces',
+    'txt-ch-total':'Total','txt-ch-received':'Reçu','txt-ch-change':'Monnaie',
+    'txt-split-btn':'Partager','txt-receipt-btn':'Reçu',
+  },
+  ar:{
+    'txt-cart':'السلة','txt-no-items':'لا توجد عناصر','txt-items':'عناصر','txt-discount':'خصم',
+    'txt-total':'الإجمالي','txt-checkout':'الدفع','txt-clear':'إفراغ',
+    'txt-detected-item':'المكتشف','txt-confidence':'الثقة','txt-camera-off':'الكاميرا مغلقة',
+    'txt-start-cam':'تشغيل','txt-manual-add':'إضافة','txt-quantity':'الكمية',
+    'txt-add-btn':'أضف','txt-stat-items':'عناصر','txt-stat-unique':'مختلفة','txt-stat-avg':'متوسط',
+    'txt-reco':'مقترحات','txt-undo':'تراجع','txt-redo':'إعادة',
+    'txt-payment-title':'💳 الدفع','txt-payment-sub':'امسح رمز QR',
+    'txt-bill-amount':'المبلغ','txt-cash-received':'النقد',
+    'txt-ch-total':'الإجمالي','txt-ch-received':'المستلم','txt-ch-change':'الباقي',
+    'txt-split-btn':'تقسيم','txt-receipt-btn':'فاتورة',
+  },
+  mr:{
+    'txt-cart':'कार्ट','txt-no-items':'वस्तू नाही','txt-items':'वस्तू','txt-discount':'सूट',
+    'txt-total':'एकूण','txt-checkout':'चेकआउट','txt-clear':'कार्ट रिकामी',
+    'txt-detected-item':'ओळखले','txt-confidence':'खात्री','txt-camera-off':'कॅमेरा बंद',
+    'txt-start-cam':'कॅमेरा सुरू','txt-manual-add':'वस्तू जोडा','txt-quantity':'प्रमाण',
+    'txt-add-btn':'जोडा','txt-stat-items':'वस्तू','txt-stat-unique':'वेगळ्या','txt-stat-avg':'सरासरी',
+    'txt-reco':'सुचवलेले','txt-undo':'मागे','txt-redo':'पुढे',
+    'txt-payment-title':'💳 पेमेंट','txt-payment-sub':'QR स्कॅन करा',
+    'txt-bill-amount':'बिल रक्कम','txt-cash-received':'रोख',
+    'txt-ch-total':'एकूण','txt-ch-received':'मिळाले','txt-ch-change':'परत',
+    'txt-split-btn':'बिल विभागा','txt-receipt-btn':'पावती',
+  },
+};
+let currentLang = 'en';
+
+function setLanguage(lang){
+  currentLang = lang;
+  const dict = LANG[lang]||LANG.en;
+  for(const[id,text] of Object.entries(dict)){const el=document.getElementById(id);if(el)el.textContent=text;}
+  document.dir=(lang==='ar')?'rtl':'ltr';
+  buildManualGrid(); if(splitPeople.length) renderSplitUI();
+}
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let model,webcam,running=false,lastPredictTime=0;
+let trackItem=null,trackStart=null,lastAdded="",lastAddedTime=0;
+let cartItems=[],total=0,manualQty=1;
+let undoStack=[],redoStack=[];
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',async()=>{
+  buildManualGrid(); buildQtySelect(); updateUndoRedo();
+  document.getElementById('upi-id-display').textContent = MERCHANT_UPI_ID;
+  try{
+    const resp=await fetch(MODEL_URL+'metadata.json');
+    const meta=await resp.json();
+    if(meta.labels&&Array.isArray(meta.labels)){
+      for(const label of meta.labels){
+        const norm=label.trim();
+        if(!norm||norm.toLowerCase()==='nothing'||norm==='3')continue;
+        if(norm.toLowerCase().includes('coca')||norm.toLowerCase().includes('cola'))continue;
+        const mapped=CLASS_MAP[norm]||CLASS_MAP[norm.toLowerCase()]||norm;
+        if(!PRODUCT_DATA[mapped]&&!VALID_PRODUCTS.includes(mapped)){
+          PRODUCT_DATA[mapped]={price:50,emoji:'📦',class:norm};
+          VALID_PRODUCTS.push(mapped); CLASS_MAP[norm]=mapped;
+        }
+      }
+      buildManualGrid(); buildQtySelect();
+    }
+  }catch(e){}
+});
+
+function buildManualGrid(){
+  const grid=document.getElementById('manual-grid'); grid.innerHTML='';
+  for(const[name,data] of Object.entries(PRODUCT_DATA)){
+    const btn=document.createElement('button'); btn.className='manual-btn';
+    btn.innerHTML=`${data.emoji} ${name}<span class="price">₹${data.price}</span>`;
+    btn.onclick=()=>addToCart(name,1); grid.appendChild(btn);
+  }
+}
+
+function buildQtySelect(){
+  const sel=document.getElementById('qty-item-select'); sel.innerHTML='';
+  for(const[name,data] of Object.entries(PRODUCT_DATA)){
+    const opt=document.createElement('option'); opt.value=name;
+    opt.textContent=`${data.emoji} ${name} — ₹${data.price}`; sel.appendChild(opt);
+  }
+}
+
+function switchTab(tab){
+  document.getElementById('scan-tab').style.display=tab==='scan'?'':'none';
+  document.getElementById('manual-tab').style.display=tab==='manual'?'':'none';
+  document.getElementById('tab-scan').classList.toggle('active',tab==='scan');
+  document.getElementById('tab-manual').classList.toggle('active',tab==='manual');
+  if(tab==='manual') updateStats();
+}
+
+function changeQty(delta){manualQty=Math.max(1,Math.min(20,manualQty+delta)); document.getElementById('qty-val').textContent=manualQty;}
+function addQtyItem(){const sel=document.getElementById('qty-item-select'); const name=sel.value; if(!name||!PRODUCT_DATA[name])return; addToCart(name,manualQty);}
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+async function startCamera(){
+  const btn=document.getElementById('btn-start'); const errEl=document.getElementById('err-box');
+  errEl.classList.remove('on'); btn.disabled=true;
+  document.getElementById('txt-start-cam').textContent='Loading model…'; setStatus('loading','LOADING');
+  try{
+    model=await tmImage.load(MODEL_URL+'model.json',MODEL_URL+'metadata.json');
+    document.getElementById('txt-start-cam').textContent='Starting…';
+    webcam=new tmImage.Webcam(300,300,true); await webcam.setup(); await webcam.play();
+    document.body.appendChild(webcam.canvas);
+    webcam.canvas.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;';
+    document.getElementById('vbox').classList.add('on');
+    document.getElementById('txt-start-cam').textContent='📡 Scanner Active';
+    btn.disabled=true; setStatus('live','LIVE'); running=true; requestAnimationFrame(loop);
+  }catch(e){
+    errEl.textContent='Error: Allow camera permissions or run on localhost.'; errEl.classList.add('on');
+    btn.disabled=false; document.getElementById('txt-start-cam').textContent='▶ Retry'; setStatus('err','ERROR');
+  }
+}
+
+function loop(){if(!running)return; webcam.update(); const now=Date.now(); if(now-lastPredictTime>=PREDICT_EVERY_MS){lastPredictTime=now; predict(now);} requestAnimationFrame(loop);}
+
+function getProduct(className){
+  if(!className)return null; const raw=className.trim();
+  if(raw.toLowerCase().includes('coca')||raw.toLowerCase().includes('cola'))return 'Coke';
+  const mapped=CLASS_MAP[raw]||CLASS_MAP[raw.toLowerCase()];
+  if(mapped&&VALID_PRODUCTS.includes(mapped))return mapped;
+  if(VALID_PRODUCTS.includes(raw))return raw; return null;
+}
+
+let detectBufferStart=null,detectBufferItem=null;
+
+async function predict(now){
+  let preds; try{preds=await model.predict(webcam.canvas);}catch(e){return;}
+  let best=preds[0]; for(const p of preds)if(p.probability>best.probability)best=p;
+  const pct=Math.round(best.probability*100); let product=getProduct(best.className);
+  const isNothing=best.className&&(best.className.toLowerCase().includes('nothing')||best.className==='3');
+  if(isNothing&&best.probability>=CONFIDENCE)product=null;
+  updateConfBar(pct);
+  const bufBar=document.getElementById('buffer-bar'); const bufLabel=document.getElementById('buffer-label');
+  if(product&&best.probability>=CONFIDENCE){
+    document.getElementById('det-name').textContent=product; document.getElementById('det-name').classList.add('hi');
+    document.getElementById('scan-item-name').textContent=PRODUCT_DATA[product].emoji+' '+product;
+    document.getElementById('reticle-core').classList.add('tracking');
+    // No detect buffer — start SCAN_HOLD tracking immediately
+    bufBar.style.width='0%'; bufLabel.classList.remove('show');
+    if(product!==trackItem){trackItem=product; trackStart=now; updateRing(0,false);}
+    const held=now-trackStart; const prog=Math.min(held/SCAN_HOLD_MS,1); updateRing(prog,false);
+    const secs=Math.ceil((SCAN_HOLD_MS-held)/1000);
+    document.getElementById('scan-status-txt').textContent=prog<1?`Hold steady… ${secs}s`:'Adding…';
+    if(prog>=1){
+      const cool=(product!==lastAdded)||(now-lastAddedTime>BUFFER_MS);
+      if(cool){addToCart(product,1); lastAdded=product; lastAddedTime=now;}
+      trackItem=null; trackStart=null; detectBufferItem=null; detectBufferStart=null; updateRing(0,true);
+      document.getElementById('scan-status-txt').textContent='Waiting for item…';
+      document.getElementById('scan-item-name').textContent=''; document.getElementById('reticle-core').classList.remove('tracking');
+    }
+  }else{
+    trackItem=null; trackStart=null; detectBufferItem=null; detectBufferStart=null;
+    bufBar.style.width='0%'; bufLabel.classList.remove('show'); updateRing(0,false);
+    document.getElementById('det-name').textContent='—'; document.getElementById('det-name').classList.remove('hi');
+    document.getElementById('scan-item-name').textContent=''; document.getElementById('scan-status-txt').textContent='Waiting for item…';
+    document.getElementById('reticle-core').classList.remove('tracking');
+  }
+}
+
+function updateRing(progress,flash){
+  const circ=2*Math.PI*18; const ring=document.getElementById('ring'); const pct=document.getElementById('ring-pct');
+  if(ring)ring.style.strokeDashoffset=circ*(1-progress); pct.textContent=progress>0?Math.round(progress*100)+'%':'';
+  if(flash&&ring){ring.style.stroke='var(--green)'; setTimeout(()=>{if(ring)ring.style.stroke='';},300);}
+}
+
+function updateConfBar(pct){
+  const fill=document.getElementById('conf-fill'); fill.style.width=pct+'%';
+  fill.className='conf-fill '+(pct>=85?'hi':pct>=55?'md':'lo'); document.getElementById('conf-num').textContent=pct+'%';
+}
+
+function setStatus(state,txt){
+  const pill=document.getElementById('status-pill');
+  pill.className='status-pill '+(state==='live'?'live':state==='err'?'err':'');
+  document.getElementById('status-txt').textContent=txt;
+}
+
+// ── CART ─────────────────────────────────────────────────────────────────────
+function pushUndoState(){undoStack.push(JSON.stringify({items:cartItems,total})); redoStack=[]; updateUndoRedo();}
+function undoAction(){if(!undoStack.length)return; redoStack.push(JSON.stringify({items:cartItems,total})); const prev=JSON.parse(undoStack.pop()); cartItems=prev.items; total=prev.total; renderCart(); updateUndoRedo(); showToast('↩ Undone','warn');}
+function redoAction(){if(!redoStack.length)return; undoStack.push(JSON.stringify({items:cartItems,total})); const next=JSON.parse(redoStack.pop()); cartItems=next.items; total=next.total; renderCart(); updateUndoRedo(); showToast('↪ Redone','warn');}
+function updateUndoRedo(){document.getElementById('btn-undo').disabled=!undoStack.length; document.getElementById('btn-redo').disabled=!redoStack.length;}
+
+function addToCart(item,qty){
+  if(!PRODUCT_DATA[item])return; pushUndoState(); const price=PRODUCT_DATA[item].price;
+  const existing=cartItems.find(i=>i.name===item);
+  if(existing){existing.qty+=qty; existing.totalPrice+=price*qty;}
+  else{cartItems.push({id:Date.now(),name:item,qty,price,totalPrice:price*qty});}
+  total+=price*qty; renderCart(); updateStats(); showRecommendations(item);
+  showToast(`${PRODUCT_DATA[item].emoji} ${item} ×${qty} added`,'success');
+}
+
+function removeItem(id){
+  const idx=cartItems.findIndex(i=>i.id===id); if(idx===-1)return; pushUndoState();
+  total-=cartItems[idx].totalPrice; cartItems.splice(idx,1); renderCart(); updateStats();
+}
+
+function changeItemQty(id,delta){
+  const item=cartItems.find(i=>i.id===id); if(!item)return; const newQty=item.qty+delta;
+  if(newQty<=0){removeItem(id);return;} pushUndoState();
+  total+=item.price*delta; item.qty=newQty; item.totalPrice=item.price*newQty; renderCart(); updateStats();
+}
+
+function clearCart(){
+  if(!cartItems.length)return; pushUndoState(); cartItems=[]; total=0;
+  trackItem=null; trackStart=null; lastAdded=''; renderCart(); updateStats();
+  document.getElementById('reco-section').style.display='none'; showToast('Cart cleared','warn');
+}
+
+function renderCart(){
+  const list=document.getElementById('cart-list'); const n=cartItems.length;
+  document.getElementById('badge').textContent=n+' item'+(n!==1?'s':'');
+  document.getElementById('count-foot').textContent=n;
+  document.getElementById('btn-checkout').disabled=n===0;
+  document.getElementById('empty-state').style.display=n===0?'flex':'none';
+  const td=document.getElementById('total-disp');
+  td.textContent='₹'+total; document.getElementById('total-foot').textContent='₹'+total;
+  td.classList.add('bump'); setTimeout(()=>td.classList.remove('bump'),140);
+  list.querySelectorAll('.citem').forEach(el=>el.remove());
+  for(const item of cartItems){
+    const div=document.createElement('div'); div.className='citem';
+    div.innerHTML=`<span class="citem-emoji">${PRODUCT_DATA[item.name].emoji}</span>
+      <div class="citem-info"><div class="citem-name">${item.name}</div><div class="citem-qty">₹${item.price} × ${item.qty}</div></div>
+      <span class="citem-price">₹${item.totalPrice}</span>
+      <div class="citem-btns">
+        <button class="citem-btn" data-id="${item.id}" data-d="-1">−</button>
+        <button class="citem-btn" data-id="${item.id}" data-d="1">+</button>
+        <button class="citem-btn del" data-id="${item.id}" data-del="1">×</button>
+      </div>`;
+    list.appendChild(div);
+  }
+  list.querySelectorAll('.citem-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{const id=Number(btn.dataset.id); if(btn.dataset.del)removeItem(id); else changeItemQty(id,Number(btn.dataset.d));});
+  });
+}
+
+function updateStats(){
+  const n=cartItems.reduce((s,i)=>s+i.qty,0); const unique=cartItems.length;
+  const avg=n>0?Math.round(total/n):0;
+  document.getElementById('stat-items').textContent=n;
+  document.getElementById('stat-unique').textContent=unique;
+  document.getElementById('stat-avg').textContent='₹'+avg;
+}
+
+function showRecommendations(lastItem){
+  const inCart=new Set(cartItems.map(i=>i.name));
+  const recos=(RECO_RULES[lastItem]||[]).filter(p=>!inCart.has(p)&&PRODUCT_DATA[p]);
+  const sec=document.getElementById('reco-section'); const chips=document.getElementById('reco-chips');
+  if(!recos.length){sec.style.display='none';return;}
+  sec.style.display=''; chips.innerHTML='';
+  for(const name of recos){
+    const chip=document.createElement('div'); chip.className='reco-chip';
+    chip.innerHTML=`${PRODUCT_DATA[name].emoji} ${name} <span class="reco-chip-price">₹${PRODUCT_DATA[name].price}</span>`;
+    chip.onclick=()=>{addToCart(name,1); chip.remove(); if(!chips.children.length)sec.style.display='none';};
+    chips.appendChild(chip);
+  }
+}
+
+// ── CHECKOUT / PAYMENT ───────────────────────────────────────────────────────
+const DENOMINATIONS = [2000,500,200,100,50,20,10,5,2,1];
+
+function checkout(){
+  if(!cartItems.length)return;
+
+  // Set amount display
+  document.getElementById('rzp-amount-disp').textContent = '₹'+total;
+  document.getElementById('sms-status').textContent = '';
+
+  // Update SMS preview with current cart
+  const smsPreview = document.getElementById('sms-preview');
+  if(smsPreview) smsPreview.textContent = buildSMSText();
+
+  openModal('qr-modal');
+}
+
+function completePay(){
+  closeModal('qr-modal');
+  clearCart();
+  showToast('✅ Payment complete!','success');
+}
+
+function openPaymentModal(){ checkout(); }
+
+function switchPayTab(){} // no-op — tabs removed
+
+function buildQuickAmounts(){} // no-op — cash removed
+function calcChange(){}        // no-op — cash removed
+function confirmCash(){}       // no-op — cash removed
+
+// ── RECEIPT ──────────────────────────────────────────────────────────────────
+function openReceiptModal(){
+  const now=new Date().toLocaleString();
+  const rows=cartItems.map(i=>`<div class="receipt-item"><span>${PRODUCT_DATA[i.name].emoji} ${i.name} <span class="qty">×${i.qty}</span></span><span>₹${i.totalPrice}</span></div>`).join('')||'<div style="color:var(--ink3);text-align:center;padding:8px;font-size:11px">Cart is empty</div>';
+  document.getElementById('receipt-content').innerHTML=`<div class="receipt-head"><div class="receipt-store">SmartBilling</div><div class="receipt-date">${now}</div></div><div class="receipt-items">${rows}</div><hr class="receipt-divider"><div class="receipt-total"><span>TOTAL</span><span>₹${total}</span></div><div class="receipt-footer">Thank you for shopping!<br>Powered by SmartBilling AI</div>`;
+  openModal('receipt-modal');
+}
+
+function printReceipt(){window.print();}
+
+// ── SPLIT BILL ────────────────────────────────────────────────────────────────
+let splitPeople=[],activeSplitPerson=0;
+
+function openSplitModal(){
+  if(!cartItems.length){showToast('Add items first','warn');return;}
+  splitPeople=[{name:'Person 1',assignedItems:new Set()}]; activeSplitPerson=0;
+  renderSplitUI(); openModal('split-modal');
+}
+
+function addSplitPerson(){splitPeople.push({name:`Person ${splitPeople.length+1}`,assignedItems:new Set()}); activeSplitPerson=splitPeople.length-1; renderSplitUI();}
+function removeSplitPerson(idx){if(splitPeople.length<=1)return; splitPeople.splice(idx,1); activeSplitPerson=Math.min(activeSplitPerson,splitPeople.length-1); renderSplitUI();}
+function setActivePerson(idx){activeSplitPerson=idx; renderSplitUI();}
+function toggleItemAssignment(cartItemId){
+  const person=splitPeople[activeSplitPerson]; if(!person)return;
+  splitPeople.forEach((p,i)=>{if(i!==activeSplitPerson)p.assignedItems.delete(cartItemId);});
+  if(person.assignedItems.has(cartItemId))person.assignedItems.delete(cartItemId); else person.assignedItems.add(cartItemId);
+  renderSplitUI();
+}
+function getPersonTotal(person){let t=0; for(const id of person.assignedItems){const item=cartItems.find(i=>i.id===id); if(item)t+=item.totalPrice;} return t;}
+
+function renderSplitUI(){
+  const tabsEl=document.getElementById('split-people-tabs'); tabsEl.innerHTML='';
+  splitPeople.forEach((p,i)=>{
+    const t=getPersonTotal(p); const tab=document.createElement('div');
+    tab.className='split-person-tab'+(i===activeSplitPerson?' active':'');
+    tab.innerHTML=`<span>${p.name}</span><span class="tab-amt">₹${t}</span>`+(splitPeople.length>1?`<button class="split-tab-del" onclick="event.stopPropagation();removeSplitPerson(${i})">×</button>`:'');
+    tab.onclick=()=>setActivePerson(i); tabsEl.appendChild(tab);
+  });
+  const itemList=document.getElementById('split-item-list'); itemList.innerHTML='';
+  cartItems.forEach(item=>{
+    const owner=splitPeople.findIndex(p=>p.assignedItems.has(item.id));
+    const isAssignedToActive=owner===activeSplitPerson; const isAssignedToOther=owner!==-1&&owner!==activeSplitPerson;
+    const row=document.createElement('div'); row.className='split-item-row'+(isAssignedToActive?' assigned':'');
+    row.style.opacity=isAssignedToOther?'0.4':'1';
+    row.innerHTML=`<span class="split-item-emoji">${PRODUCT_DATA[item.name].emoji}</span><span class="split-item-name">${item.name}<span class="split-item-qty-note"> ×${item.qty}</span></span><span class="split-item-price">₹${item.totalPrice}</span><div class="split-item-check">${isAssignedToActive?'✓':''}</div>`;
+    if(!isAssignedToOther){row.onclick=()=>toggleItemAssignment(item.id); row.style.cursor='pointer';}
+    itemList.appendChild(row);
+  });
+  const summaryEl=document.getElementById('split-summary'); summaryEl.innerHTML='';
+  splitPeople.forEach(p=>{const t=getPersonTotal(p); const row=document.createElement('div'); row.className='split-sum-row'; row.innerHTML=`<span class="split-sum-name">👤 ${p.name}</span><span class="split-sum-amt">₹${t}</span>`; summaryEl.appendChild(row);});
+  const assigned=new Set(); splitPeople.forEach(p=>p.assignedItems.forEach(id=>assigned.add(id)));
+  const unassigned=cartItems.filter(i=>!assigned.has(i.id));
+  const warnEl=document.getElementById('split-warn');
+  warnEl.innerHTML=unassigned.length>0?`<div class="split-unassigned-warn">⚠ ${unassigned.length} item(s) not assigned</div>`:'';
+}
+
+function confirmSplit(){
+  const lines=splitPeople.map(p=>`${p.name}: ₹${getPersonTotal(p)}`).join(' · ');
+  closeModal('split-modal'); showToast(`Split done — ${lines}`,'success');
+}
+
+// ── RAZORPAY ──────────────────────────────────────────────────────────────────
+let rzpConfig = JSON.parse(localStorage.getItem('rzp_config') || 'null');
+
+function updateRzpStatus(){
+  const key = document.getElementById('rzp-key').value.trim();
+  const statusEl = document.getElementById('rzp-cred-status');
+  if(key.startsWith('rzp_')){
+    statusEl.style.cssText = 'font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:#d4edda;color:#155724;margin-top:6px;';
+    statusEl.textContent = '✅ Key looks valid — save to enable payments';
+  } else {
+    statusEl.style.cssText = 'font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:6px;background:var(--card3);color:var(--ink3);margin-top:6px;';
+    statusEl.textContent = '⚠ Enter Razorpay Key ID (starts with rzp_live_ or rzp_test_)';
+  }
+}
+
+function saveRzpConfig(){
+  const key = document.getElementById('rzp-key').value.trim();
+  const biz = document.getElementById('rzp-biz-name').value.trim() || 'SmartBilling';
+  if(!key.startsWith('rzp_')){ showToast('Enter a valid Razorpay Key ID','warn'); return; }
+  rzpConfig = { key, biz };
+  localStorage.setItem('rzp_config', JSON.stringify(rzpConfig));
+  showToast('✅ Razorpay config saved','success');
+}
+
+function launchRazorpay(){
+  if(!rzpConfig || !rzpConfig.key){ showToast('Save Razorpay config first','warn'); return; }
+  if(typeof Razorpay === 'undefined'){
+    // Dynamically load Razorpay SDK if not present
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => _openRzp();
+    document.head.appendChild(s);
+  } else {
+    _openRzp();
+  }
+}
+
+function _openRzp(){
+  const options = {
+    key: rzpConfig.key,
+    amount: total * 100, // Razorpay expects paise
+    currency: 'INR',
+    name: rzpConfig.biz || 'SmartBilling',
+    description: 'Bill Payment — ' + cartItems.length + ' item(s)',
+    theme: { color: '#c97d2a' },
+    handler: function(response){
+      closeModal('qr-modal');
+      clearCart();
+      showToast('✅ Payment successful! Payment ID: ' + response.razorpay_payment_id.slice(0,12) + '…','success');
+    },
+    modal: {
+      ondismiss: function(){ showToast('Payment cancelled','warn'); }
+    }
+  };
+  try {
+    const rzp = new Razorpay(options);
+    rzp.open();
+  } catch(e) {
+    showToast('Razorpay error — check Key ID','err');
+  }
+}
+
+// ── HOME SMS TOGGLE ───────────────────────────────────────────────────────────
+function toggleHomeSMS(){
+  const body = document.getElementById('home-sms-body');
+  const btn  = document.getElementById('home-sms-toggle-btn');
+  const open = body.classList.toggle('open');
+  btn.textContent = open ? '▼ Hide' : '▶ Configure';
+  if(open) document.getElementById('sms-preview').textContent = buildSMSText();
+}
+
+// Load saved Razorpay config on startup
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(rzpConfig){
+    const k = document.getElementById('rzp-key');
+    const b = document.getElementById('rzp-biz-name');
+    if(k) k.value = rzpConfig.key || '';
+    if(b) b.value = rzpConfig.biz || '';
+    updateRzpStatus();
+  }
+});
+
+function openModal(id){document.getElementById(id).classList.add('show');}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.modal-backdrop').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});});
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastT;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast'); t.textContent=msg; t.className='show '+type;
+  clearTimeout(toastT); toastT=setTimeout(()=>t.className='',2400);
+}
+</script>
+</body>
+</html>
