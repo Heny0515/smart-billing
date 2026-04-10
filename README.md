@@ -1,64 +1,55 @@
-🧾 AI-powered Smart Billing System using Camera-Based Product Detection and Automatic Cart Generation
-🚀 Problem Statement
+# AI-powered Smart Billing System using Camera-Based Product Detection and Automatic Cart Generation
 
-Traditional billing systems rely heavily on barcode scanners and human intervention. This leads to:
+## Problem Statement
+Traditional billing systems rely on barcode scanners and human intervention, leading to long queues, higher operational costs, and billing inefficiencies.
 
-Long checkout queues
-Increased operational costs (staff + hardware)
-Human errors in billing
-Inefficiency in modern retail environments
-💡 Solution
+## Solution
+This project introduces a camera-based product detection system that automatically identifies items and adds them to a digital cart, eliminating the need for barcode scanning and manual billing.
 
-Our system eliminates the need for barcode scanners and manual billing by using a camera-based product detection system.
+## How It Works
+1. Customer picks up a product  
+2. Camera detects the item using a trained AI model  
+3. Item is automatically added to the cart  
+4. Users can modify quantity or manually add items if needed  
+5. Bill is generated instantly  
+6. Payment is completed via Razorpay  
+7. Bill details are sent via Twilio  
 
-🔄 How it works:
-Customer picks up a product
-Camera detects the item using a trained AI model
-Item is automatically added to the cart
-Users can manage quantity or manually add items if needed
-Bill is generated instantly
-Payment is completed via Razorpay
-Bill details are sent via Twilio
+## Tech Stack
+Frontend:
+- HTML  
+- CSS  
+- JavaScript  
 
-⚙️ Tech Stack:
-🖥️ Frontend
-HTML
-CSS
-JavaScript
+AI / Detection:
+- Teachable Machine (custom-trained model)
 
-🤖 AI / Detection
-Teachable Machine (custom-trained model on product images)
+Deployment:
+- Wasmer  
 
-🌐 Deployment
-Wasmer
+Integrations:
+- Twilio (notifications)  
+- Razorpay (payments)  
 
-📡 Integrations
-Twilio → for sending bill notifications
-Razorpay → for secure online payments
+## Features
+- Camera-based product detection  
+- Automatic cart generation  
+- Manual item addition (fallback system)  
+- Quantity management  
+- Razorpay payment integration  
+- Twilio-based bill notifications  
+- Multi-language support  
+- Split billing between users  
+- User-friendly interface  
 
-✨ Features:
-📸 Camera-based product detection
-🛒 Automatic cart generation
-➕ Manual item addition (fallback system)
-🔢 Quantity management inside cart
-💳 Integrated Razorpay payment system
-📩 Twilio notifications for billing details
-🌍 Multiple language support
-👥 Split bill between multiple users
-🎨 Smooth and user-friendly UI
+## Future Scope
+- Improve AI accuracy with larger datasets  
+- Add real-time object tracking for multiple items  
+- Integrate with smart carts and IoT devices  
+- Add voice assistant for hands-free interaction  
+- Develop retailer dashboard for inventory management  
+- Enable real-time stock tracking and sales analytics  
+- Implement low-stock alerts and automated restocking  
 
-👥 Team:
+## Team
 Something Like Tech
-
-🏁 Future Scope:
-Improve AI accuracy with larger datasets
-Add real-time object tracking for multiple items
-Integrate with smart carts / IoT devices
-Add voice assistant for hands-free interaction
-Add retailer dashboard for inventory management
-Enable real-time stock tracking and sales analytics
-Implement low-stock alerts and auto restocking system
-Integrate full smart retail ecosystem with billing + inventory
-
-💥 Why This Matters:
-This project brings us one step closer to fully automated retail systems, reducing dependency on hardware and manpower while enhancing user experience.
